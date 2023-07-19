@@ -1,0 +1,223 @@
+version: "3.3"
+networks:
+  app_kychu:
+    driver: bridge
+    enable_ipv6: false
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.0.0/24
+          gateway: 172.16.0.1
+services:
+  webserver:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.1
+    expose:
+      - 22
+    links:
+      - phpmyadmin
+    build: ./webserver
+    restart: 'no'
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./logs/webserver/:/var/log/apache2
+      - ./webserver/hosts:/etc/apache2/sites-enabled
+  phpmyadmin:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.2
+    restart: 'no'
+    image: phpmyadmin
+    environment:
+      - PMA_HOSTS=db,db_gal1,db_gal2
+      - PMA_USER=root
+      - PMA_PASSWORD=root
+    depends_on:
+      - db
+    expose:
+      - 80
+  node:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.3
+    expose:
+      - 3000
+    links:
+      - redis
+      - redis-sentinel1
+      - redis-sentinel2
+      - redis-sentinel3
+      - db
+    restart: 'no'
+    build: ./node
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/node/:/apps
+      - ./logs/node:/apps/logs
+  db:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.4
+    restart: 'no'
+    build: ./db
+    command:
+      - --innodb-print-all-deadlocks=1
+    env_file:
+      - ".env"
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db/init/:/docker-entrypoint-initdb.d/
+      - ./db/dumps:/var/db/dumps/
+      - ./db/data:/var/lib/mysql
+  redis:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.5
+    restart: 'no'
+    image: "bitnami/redis:latest"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_REPLICATION_MODE=master
+    expose:
+      - 6379
+    ports:
+      - "6379:6379"
+  redis-slave:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.6
+    links:
+      - redis
+    restart: 'no'
+    expose:
+      - 6379
+    image: "bitnami/redis:latest"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_MASTER_HOST=redis
+    ports:
+      - "6380:6379"
+  redis-sentinel1:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.7
+    image: "bitnami/redis-sentinel:latest"
+    environment:
+      - REDIS_MASTER_HOST=redis
+    links:
+      - redis
+    ports:
+      - "26379:26379"
+    expose:
+      - 26379
+    restart: 'no'
+  redis-sentinel2:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.8
+    image: "bitnami/redis-sentinel:latest"
+    links:
+      - redis
+    ports:
+      - "26380:26379"
+    expose:
+      - 26379
+    restart: 'no'
+  redis-sentinel3:
+    links:
+      - redis
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.9
+    image: "bitnami/redis-sentinel:latest"
+    ports:
+      - "26381:26379"
+    expose:
+      - 26379
+    restart: 'no'
+  redis-gui:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.10
+    links:
+      - redis
+      - redis-slave
+      - redis-sentinel1
+      - redis-sentinel2
+      - redis-sentinel3
+    image: rediscommander/redis-commander:latest
+    restart: 'no'
+    volumes:
+      - ./redis.json:/redis-commander/config/local-production.json
+    depends_on:
+      - redis-sentinel3
+      - webserver
+    environment:
+      - PORT=80
+      - ADDRESS=0.0.0.0
+    ports:
+      - "80"
+    expose:
+      - 80
+  db_gal1:
+    ports:
+      - "3307:3306"
+      - "4444:4444"
+      - "4567:4567"
+      - "4568:4568"
+    expose:
+      - 3306
+      - 4444
+      - 4567
+      - 4568
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.11
+    restart: 'no'
+    build: ./db_gal1
+    environment:
+      - MARIADB_GALERA_CLUSTER_BOOTSTRAP = yes
+    env_file:
+      - ".env"
+  db_gal2:
+    env_file:
+      - ".env"
+    ports:
+        - "3308:3306"
+        - "4445:4444"
+        - "4569:4567"
+        - "4570:4568"
+    expose:
+      - 3306
+      - 4444
+      - 4567
+      - 4568
+    depends_on:
+      - db_gal1
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.12
+    restart: 'no'
+    build: ./db_gal2
+    environment:
+      - MARIADB_GALERA_CLUSTER_ADDRESS = gcomm://db_gal1:4567
+  elastic:
+    networks:
+      app_kychu:
+        ipv4_address: 172.16.0.13
+    restart: 'no'
+    build: ./elastic
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    expose:
+      - 9200
+      - 9300
+    env_file:
+      - ".env"

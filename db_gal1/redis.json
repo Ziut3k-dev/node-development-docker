@@ -1,0 +1,47 @@
+{
+  "connections": [
+    {
+      "label": "redis-sentinel",
+      "sentinels": [
+        {
+          "host": "redis-sentinel1",
+          "port": 26379
+        },
+        {
+          "host": "redis-sentinel2",
+          "port": 26379
+        },
+        {
+          "host": "redis-sentinel3",
+          "port": 26379
+        }
+      ],
+      "sentinelName": "mymaster",
+      "dbIndex": 0
+    },
+    {
+      "label": "master-db11",
+      "host": "redis",
+      "port": 6379,
+      "dbIndex": 11
+    },
+    {
+      "label": "master-db10",
+      "host": "redis",
+      "port": 6379,
+      "dbIndex": 10
+    },
+    {
+      "label": "master-db0",
+      "host": "redis",
+      "port": 6379,
+      "dbIndex": 0
+    },
+    {
+      "label": "master-db1",
+      "host": "redis",
+      "port": 6379,
+      "dbIndex": 1
+    }
+  ]
+}
